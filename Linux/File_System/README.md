@@ -72,6 +72,11 @@ Logical Volume Management được sinh ra để giải quyết vấn đề đó
 <p align="center">
   <img src="image-3.png" alt="Traditional Storage Management" style="display: block; margin: 0 auto;">
 </p>
+LVM hiện có 2 phiên bản cho hệ điều hành Linux:
+
+- Phiên bản nằm trong kernel 2.4 series
+- Phiên bản mới nhất và lớn nhất của LVM cho Linux.  LVM 2 sử dụng trình điều khiển kernel mapper.
+
 
 LVM được cấu thành bằng cách xếp các lớp ảo hóa lên trên các thiết bị vật lý lưu trữ. Các lớp cơ bản có thể kể đến:
 
@@ -88,3 +93,104 @@ LVM được cấu thành bằng cách xếp các lớp ảo hóa lên trên cá
 - Một Volume Group sẽ được chia nhỏ thành nhiều Logical Volume
 - Nó được dùng để mount tới hệ thống file tập tin (File System)
 - Được format với các định dạng ext2, ext3
+#### Extent
+Extent là đơn vị nhỏ nhất mà LVM sử dụng để quản lý không gian lưu trữ. Thay vì làm việc với một khối toàn bộ ổ cứng như một khối lớn, LVM chia nhỏ storage thành những block nhỏ để dễ dàng sắp xếp và quản lý
+Hai loại Extent:
+- Physical Extent: Là đơn vị lưu trữ thực tế trên hardware
+- Logical Extent: là cách LVM quản lý và hiển thị storage trong Logical Volume 
+##### Cách hoạt động:
+LVM tạo ra một bản đồ ánh xạ giữa Logical Extent và Physical Extent 
+```
+Logical Volume:  [LE1][LE2][LE3][LE4]
+                  ↓    ↓    ↓    ↓
+Physical Volume: [PE5][PE2][PE8][PE1]
+```
+Một số ưu điểm của việc sử dụng Extent:
+- Linh hoạt: LVM có thể di chuyển dữ liệu từ PE này sang PE khác mà không ảnh hưởng đến LE, cho phép thay thế ổ cứng cũ mà không cần tắt máy.
+- Mở rộng dễ dàng: Chỉ cần thêm PE, không ảnh hưởng đến việc downtime của hệ thống
+## Cách sử dụng và tạo LVM
+
+## Chuẩn bị
+
+Trong khuôn khổ bài viết này mình sẽ sử dụng KVM với virt-manager. Nếu các bạn chưa có kiến thức về KVM và virt-manager có thể xem lại bài viết này của mình: [Link bài viết]()
+
+**Yêu cầu:**
+- Máy ảo có dung lượng cố định là 10GB
+
+## Các bước thực hiện
+
+### 1. Tạo máy ảo và thực hiện cài LVM
+
+**Bước 1:** Thực hiện cài lvm bằng câu lệnh:
+
+```bash
+sudo apt install lvm2
+```
+
+**List available disks:**
+
+```bash
+lsblk
+```
+
+![alt text](image-4.png)
+
+**Bước 2:** Thực hiện tạo một file disk image mới với qemu
+
+```bash
+sudo qemu-img create -f qcow2 /var/lib/libvirt/images/vm-disk2.qcow2 20G
+```
+
+![alt text](image-5.png)
+![alt text](image-6.png)
+
+**Bước 3:** Thực hiện thêm disk vào máy ảo
+
+![alt text](image-7.png)
+
+Không cần thực hiện các thao tác restart hay shutdown. Ổ đĩa tự động nhận đối với LVM
+
+![alt text](image-8.png)
+
+**Bước 4:** Thực hiện tạo physical volume từ disk mới được thêm vào
+
+```bash
+sudo pvcreate /dev/vdb
+sudo pvs
+```
+
+![alt text](image-9.png)
+
+**Bước 5:** Thực hiện add vào volume group
+
+```bash
+sudo vgextend ubuntu-vg /dev/vdb
+```
+
+![alt text](image-10.png)
+
+**Bước 6:** Thực hiện thêm toàn bộ không gian lưu trữ vừa thêm vào Logical Volume
+
+```bash
+sudo lvextend -l +100%FREE /dev/ubuntu-vg/ubuntu-lv
+```
+
+![alt text](image-11.png)
+
+Dung lượng logical volume sau khi được resize:
+
+![alt text](image-12.png)
+
+**Bước 7:** Thực hiện mở rộng file system
+
+```bash
+sudo resize2fs /dev/ubuntu-vg/ubuntu-lv
+```
+
+**Kết quả:**
+
+![alt text](image-13.png)
+
+## Kết luận
+
+LVM giúp quá trình thêm và mở rộng dung lượng đối với một máy ảo một cách đơn giản hơn, giải quyết vấn đề lưu trữ cũng như tạo máy ảo một cách truyền thống. Nó sẽ đơn giản việc backup dữ liệu, migrate mà không khiến hệ thống downtime.
